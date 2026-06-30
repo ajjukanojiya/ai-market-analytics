@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentSymbol, setCurrentSymbol] = useState("SBIN.NS");
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export default function Dashboard() {
   }
 
   const handleSyncAll = async () => {
+    setSyncMessage("Bulk Update in Progress (All Stocks)...");
     setIsSyncingAll(true);
     try {
         await axios.post(`http://localhost:8000/api/stocks/sync-all`);
@@ -139,6 +141,7 @@ export default function Dashboard() {
       }
       
       setIsModalOpen(false);
+      setSyncMessage(`Selective Sync in Progress (${selectedSymbols.length} stocks)...`);
       setIsSyncingAll(true);
       try {
           await axios.post(`http://localhost:8000/api/stocks/sync-selected`, {
@@ -267,7 +270,7 @@ export default function Dashboard() {
         <div className="mb-8 p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-center gap-4 animate-pulse">
             <RefreshCw className="animate-spin text-indigo-400" />
             <div>
-                <h3 className="font-bold text-white">Bulk Update in Progress...</h3>
+                <h3 className="font-bold text-white">{syncMessage}</h3>
                 <p className="text-sm text-slate-400">Fetching new data and training High-Accuracy Multivariate LSTMs for your stocks. This may take a few minutes depending on how many stocks you track.</p>
             </div>
         </div>
