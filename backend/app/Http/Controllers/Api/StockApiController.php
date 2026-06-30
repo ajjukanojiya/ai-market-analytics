@@ -54,6 +54,7 @@ class StockApiController extends Controller
 
     public function syncAllStocks()
     {
+        set_time_limit(0); // Prevent 30 second timeout for bulk updates
         $pythonPath = "C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
         $scriptPath = "F:\\milstone\\update_all_stocks.py";
         
@@ -74,6 +75,7 @@ class StockApiController extends Controller
 
     public function syncSelected(Request $request)
     {
+        set_time_limit(0); // Prevent 30 second timeout for selective updates
         $symbols = $request->input('symbols', []);
         if (empty($symbols)) {
             return response()->json(['message' => 'No symbols provided'], 400);
