@@ -1,0 +1,67 @@
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.next/
+out/
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Machine Learning / Data
+*.keras
+*.h5
+*.pkl
+*.png
+*.jpg
+*.jpeg
+
+# Laravel / PHP
+/backend/vendor/
+/backend/node_modules/
+/backend/public/storage
+/backend/public/hot
+/backend/storage/*.key
+/backend/.env
+/backend/.phpunit.result.cache
+/backend/Homestead.json
+/backend/Homestead.yaml
+/backend/npm-debug.log
+/backend/yarn-error.log
+
+# OS Generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
