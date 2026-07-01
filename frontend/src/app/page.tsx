@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import dynamic from "next/dynamic";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +14,10 @@ import {
   Legend,
   Filler,
 } from "chart.js";
-import { Line } from "react-chartjs-2";
+const Line = dynamic(
+  () => import("react-chartjs-2").then((mod) => mod.Line),
+  { ssr: false }
+);
 import { TrendingUp, TrendingDown, Activity, BrainCircuit, Search, AlertCircle, RefreshCw, CheckSquare, X } from "lucide-react";
 
 ChartJS.register(

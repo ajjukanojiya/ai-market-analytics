@@ -1,4 +1,4 @@
-import pymysql
+import psycopg2
 import subprocess
 import logging
 import os
@@ -8,10 +8,10 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 def main():
     DB_CONFIG = {
         'host': 'localhost',
-        'user': 'root',
+        'user': 'postgres',
         'password': '',
         'database': 'market_data',
-        'charset': 'utf8mb4'
+        'port': '5432'
     }
     
     import sys
@@ -21,7 +21,7 @@ def main():
         symbols = provided_symbols
     else:
         try:
-            connection = pymysql.connect(**DB_CONFIG)
+            connection = psycopg2.connect(**DB_CONFIG)
             with connection.cursor() as cursor:
                 cursor.execute("SELECT DISTINCT symbol FROM historical_stock_data")
                 symbols = [row[0] for row in cursor.fetchall()]
@@ -29,7 +29,7 @@ def main():
             logging.error(f"Failed to fetch symbols from DB: {e}")
             return
         finally:
-            if 'connection' in locals() and connection.open:
+            if 'connection' in locals() and connection:
                 connection.close()
 
     if not symbols:

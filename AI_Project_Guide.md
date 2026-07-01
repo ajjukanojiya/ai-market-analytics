@@ -7,7 +7,7 @@ Yeh guide isliye banayi gayi hai taaki project khatam hone ke baad bhi aap aasaa
 ## 🛠️ 1. Abhi tak humne kya banaya hai? (The Core Engine)
 Humara system filhal 3 main scripts par chalta hai:
 
-1. **`fetch_stock_data.py` (Data Collector):** Yeh script internet (Yahoo Finance) se kisi bhi stock ka pichla 5 saal ka data download karti hai aur aapke local MySQL database (`historical_stock_data` table) mein safe rakh deti hai.
+1. **`fetch_stock_data.py` (Data Collector):** Yeh script internet (Yahoo Finance) se kisi bhi stock ka pichla 5 saal ka data download karti hai aur aapke local PostgreSQL database (`historical_stock_data` table) mein safe rakh deti hai.
 2. **`train_lstm_model.py` (The AI Brain):** Yeh script database se data uthati hai, usme patterns dhundhti hai, aur ek AI model (LSTM) ko train karti hai. Train hone ke baad yeh apna "dimaag" ek file (`stock_lstm_model.keras`) mein save kar deti hai.
 3. **`predict_daily.py` (The Fortune Teller):** Yeh script us trained dimaag ka use karke kal ka price predict karti hai aur prediction ko `stock_predictions` table mein save kar deti hai.
 

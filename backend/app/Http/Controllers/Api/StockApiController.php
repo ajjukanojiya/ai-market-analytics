@@ -38,11 +38,14 @@ class StockApiController extends Controller
 
     public function syncStock($symbol)
     {
-        $pythonPath = "C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
-        $scriptPath = "F:\\milstone\\run_pipeline.py";
+        // Use dynamic Python path and project directory
+        $projectRoot = dirname(dirname(dirname(dirname(__DIR__))));
+        $parentDir = dirname($projectRoot);
+        $scriptPath = $parentDir . "\\run_pipeline.py";
+        $pythonPath = "python"; // Use python from PATH
         
         // Execute the python pipeline and capture output
-        $command = escapeshellcmd("$pythonPath $scriptPath $symbol") . " 2>&1";
+        $command = "cd " . escapeshellarg($parentDir) . " && " . escapeshellarg($pythonPath) . " " . escapeshellarg(basename($scriptPath)) . " " . escapeshellarg($symbol) . " 2>&1";
         $output = shell_exec($command);
         
         return response()->json([
@@ -55,10 +58,11 @@ class StockApiController extends Controller
     public function syncAllStocks()
     {
         set_time_limit(0); // Prevent 30 second timeout for bulk updates
-        $pythonPath = "C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
-        $scriptPath = "F:\\milstone\\update_all_stocks.py";
+        $projectRoot = dirname(dirname(dirname(dirname(__DIR__))));
+        $parentDir = dirname($projectRoot);
+        $pythonPath = "python"; // Use python from PATH
         
-        $command = escapeshellcmd("$pythonPath $scriptPath") . " 2>&1";
+        $command = "cd " . escapeshellarg($parentDir) . " && " . escapeshellarg($pythonPath) . " update_all_stocks.py 2>&1";
         $output = shell_exec($command);
         
         return response()->json([
@@ -81,11 +85,12 @@ class StockApiController extends Controller
             return response()->json(['message' => 'No symbols provided'], 400);
         }
 
-        $pythonPath = "C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
-        $scriptPath = "F:\\milstone\\update_all_stocks.py";
+        $projectRoot = dirname(dirname(dirname(dirname(__DIR__))));
+        $parentDir = dirname($projectRoot);
+        $pythonPath = "python"; // Use python from PATH
         
         $symbolsString = implode(' ', $symbols);
-        $command = escapeshellcmd("$pythonPath $scriptPath $symbolsString") . " 2>&1";
+        $command = "cd " . escapeshellarg($parentDir) . " && " . escapeshellarg($pythonPath) . " update_all_stocks.py " . escapeshellarg($symbolsString) . " 2>&1";
         $output = shell_exec($command);
         
         return response()->json([

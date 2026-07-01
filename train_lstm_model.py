@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-import pymysql
+import psycopg2
+import psycopg2.extras
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
@@ -12,12 +13,12 @@ import sys
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def fetch_data_from_mysql(db_config: dict, symbol: str) -> pd.DataFrame:
+def fetch_data_from_postgresql(db_config: dict, symbol: str) -> pd.DataFrame:
     logging.info(f"Fetching Multivariate data (Close, Volume) for {symbol}...")
     query = f"SELECT date, close, volume FROM historical_stock_data WHERE symbol = '{symbol}' ORDER BY date ASC"
     
     try:
-        connection = pymysql.connect(**db_config)
+        connection = psycopg2.connect(**db_config)
         df = pd.read_sql(query, connection)
         logging.info(f"Successfully fetched {len(df)} records.")
         return df
@@ -25,7 +26,7 @@ def fetch_data_from_mysql(db_config: dict, symbol: str) -> pd.DataFrame:
         logging.error(f"Error fetching data from database: {e}")
         return pd.DataFrame()
     finally:
-        if 'connection' in locals() and connection.open:
+        if 'connection' in locals() and connection:
             connection.close()
 
 def calculate_rsi(data, window=14):
@@ -49,10 +50,10 @@ def main():
     SYMBOL = sys.argv[1] if len(sys.argv) > 1 else 'SBIN.NS'
     DB_CONFIG = {
         'host': 'localhost',
-        'user': 'root',
-        'password': '',
+        'user': 'postgres',
+        'password': 'postgres',
         'database': 'market_data',
-        'charset': 'utf8mb4'
+        'port': '5432'
     }
     TIME_STEP = 60
     EPOCHS = 20
@@ -60,7 +61,7 @@ def main():
     MODEL_FILENAME = f'{SYMBOL}_lstm_model.keras'
 
     # 1. Fetch data
-    df = fetch_data_from_mysql(DB_CONFIG, SYMBOL)
+    df = fetch_data_from_postgresql(DB_CONFIG, SYMBOL)
     if df.empty:
         logging.error("No data available to train the model. Exiting.")
         return

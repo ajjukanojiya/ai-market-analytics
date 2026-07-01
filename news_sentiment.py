@@ -1,4 +1,4 @@
-import pymysql
+import psycopg2
 import feedparser
 from google import genai
 import json
@@ -9,14 +9,14 @@ from datetime import date
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_db_connection(db_config):
-    """Establishes and returns a MySQL database connection."""
-    return pymysql.connect(**db_config)
+    """Establishes and returns a PostgreSQL database connection."""
+    return psycopg2.connect(**db_config)
 
 def create_sentiments_table(cursor):
     """Creates the news_sentiments table if it doesn't exist."""
     query = """
     CREATE TABLE IF NOT EXISTS news_sentiments (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         symbol VARCHAR(50),
         date DATE,
         sentiment_score DECIMAL(4, 2),
@@ -77,10 +77,10 @@ def main():
     SYMBOL = sys.argv[1] if len(sys.argv) > 1 else 'SBIN.NS'
     DB_CONFIG = {
         'host': 'localhost',
-        'user': 'root',
-        'password': '',
+        'user': 'postgres',
+        'password': 'postgres',
         'database': 'market_data',
-        'charset': 'utf8mb4'
+        'port': '5432'
     }
     
     import os
@@ -123,14 +123,14 @@ def main():
                 sentiment_data.get('summary', 'No summary provided')
             ))
             connection.commit()
-            logging.info(f"Sentiment data for {SYMBOL} successfully saved to MySQL.")
+            logging.info(f"Sentiment data for {SYMBOL} successfully saved to PostgreSQL.")
             
-    except pymysql.MySQLError as e:
-        logging.error(f"MySQL error: {e}")
+    except psycopg2.Error as e:
+        logging.error(f"PostgreSQL error: {e}")
     except Exception as e:
         logging.error(f"Database error: {e}")
     finally:
-        if 'connection' in locals() and connection.open:
+        if 'connection' in locals() and connection:
             connection.close()
 
 if __name__ == "__main__":

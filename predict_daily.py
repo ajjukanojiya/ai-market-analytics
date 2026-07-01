@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-import pymysql
+import psycopg2
+import psycopg2.extras
 import joblib
 from tensorflow.keras.models import load_model
 import logging
@@ -12,12 +13,12 @@ import sys
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_db_connection(db_config):
-    return pymysql.connect(**db_config)
+    return psycopg2.connect(**db_config)
 
 def create_predictions_table(cursor):
     query = """
     CREATE TABLE IF NOT EXISTS stock_predictions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         symbol VARCHAR(50),
         prediction_for_date DATE,
         predicted_price DECIMAL(15, 4),
@@ -31,10 +32,10 @@ def main():
     SYMBOL = sys.argv[1] if len(sys.argv) > 1 else 'SBIN.NS'
     DB_CONFIG = {
         'host': 'localhost',
-        'user': 'root',
-        'password': '',
+        'user': 'postgres',
+        'password': 'postgres',
         'database': 'market_data',
-        'charset': 'utf8mb4'
+        'port': '5432'
     }
     MODEL_FILENAME = f'{SYMBOL}_lstm_model.keras'
     SCALER_FILENAME = f'{SYMBOL}_scaler.pkl'
@@ -112,7 +113,7 @@ def main():
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     finally:
-        if 'connection' in locals() and connection.open:
+        if 'connection' in locals() and connection:
             connection.close()
 
 if __name__ == "__main__":

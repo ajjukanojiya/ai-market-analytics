@@ -27,8 +27,8 @@ def main():
     
     for script in scripts:
         logging.info(f"⏳ Running {script}...")
-        # Use absolute path to Python 3.12 to avoid Python 3.14 missing libraries error
-        python_exe = r"C:\Users\hp\AppData\Local\Programs\Python\Python312\python.exe"
+        # Use the same Python interpreter that started this pipeline script.
+        python_exe = sys.executable
         result = subprocess.run([python_exe, script, symbol], cwd=script_dir)
         
         if result.returncode != 0:
