@@ -19,6 +19,7 @@ def main():
         "fetch_stock_data.py",
         "train_lstm_model.py",
         "predict_daily.py",
+        "backtest_evaluation.py",
         "news_sentiment.py"
     ]
     

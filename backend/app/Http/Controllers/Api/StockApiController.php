@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HistoricalStockData;
 use App\Models\StockPrediction;
 use App\Models\NewsSentiment;
+use App\Models\ModelAccuracy;
 use Illuminate\Http\Request;
 
 class StockApiController extends Controller
@@ -27,12 +28,18 @@ class StockApiController extends Controller
             ->orderBy('created_at', 'desc')
             ->first();
 
+        // 4. Fetch the latest accuracy evaluation
+        $accuracy = ModelAccuracy::where('symbol', $symbol)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
         // Return combined JSON payload
         return response()->json([
             'symbol' => $symbol,
             'historical_data' => $historical,
             'prediction' => $prediction,
             'sentiment' => $sentiment,
+            'accuracy' => $accuracy,
         ], 200, [], JSON_PRETTY_PRINT);
     }
 

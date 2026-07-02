@@ -32,6 +32,7 @@ interface StockData {
   historical_data: any[];
   prediction: any;
   sentiment: any;
+  accuracy: any;
 }
 
 export default function Dashboard() {
@@ -459,6 +460,28 @@ function DashboardContent({ data }: { data: StockData }) {
                 
                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
                     <p className="text-sm text-slate-300 leading-relaxed">"{data.sentiment?.summary || "No recent news found."}"</p>
+                </div>
+                </div>
+
+                <div className="bg-slate-900/60 rounded-3xl border border-slate-800 p-8 shadow-2xl">
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Model Accuracy</h2>
+                <div className="flex items-end gap-3 mb-4">
+                    <div className="text-4xl font-black text-white tracking-tighter">
+                    {data.accuracy?.accuracy_percentage ? parseFloat(data.accuracy.accuracy_percentage).toFixed(2) : "0.00"}%
+                    </div>
+                </div>
+                <div className="text-xs text-slate-500 mb-4">
+                    Based on last {data.accuracy?.days_evaluated || 0} predictions
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
+                    <div 
+                    className="h-1.5 rounded-full bg-indigo-500" 
+                    style={{ width: `${data.accuracy?.accuracy_percentage ? Math.min(100, parseFloat(data.accuracy.accuracy_percentage)) : 0}%` }}
+                    ></div>
+                </div>
+                <div className="flex justify-between text-xs font-medium mt-2">
+                    <span className="text-slate-500">MAE</span>
+                    <span className="text-indigo-400 font-bold">₹{data.accuracy?.mae ? parseFloat(data.accuracy.mae).toFixed(2) : "0.00"}</span>
                 </div>
                 </div>
 
