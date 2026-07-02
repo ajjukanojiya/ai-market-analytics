@@ -1,0 +1,1 @@
+D:\ai-market-analytics\ai-engine>venv\Scripts\activate
