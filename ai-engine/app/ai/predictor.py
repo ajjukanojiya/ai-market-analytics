@@ -39,7 +39,13 @@ def generate_live_prediction():
         # For now, since we re-fetch data, we can re-fit on the whole df (not perfect, but works for PoC).
         _, _, _, scaler = create_sequences(df, lookback=60)
         
-        features = ['open', 'high', 'low', 'close', 'volume', 'SMA_10', 'SMA_20', 'RSI_14', 'MACD', 'MACD_Signal', 'ROC_5']
+        features = ['open', 'high', 'low', 'close', 'volume', 'SMA_10', 'SMA_20', 'RSI_14', 'MACD', 'MACD_Signal', 'ROC_5', 'pcr_ratio', 'sentiment_score']
+        
+        # Check and fill missing features in latest window just in case
+        for f in ['pcr_ratio', 'sentiment_score']:
+            if f not in latest_window_df.columns:
+                latest_window_df[f] = 1.0 if f == 'pcr_ratio' else 0.0
+                
         data = latest_window_df[features].values
         scaled_data = scaler.transform(data)
         

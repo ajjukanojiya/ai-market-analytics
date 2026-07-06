@@ -44,6 +44,12 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Price Rate of Change
     df['ROC_5'] = df['close'].pct_change(periods=5)
     
+    # Fill missing values for new advanced features
+    if 'pcr_ratio' in df.columns:
+        df['pcr_ratio'] = df['pcr_ratio'].fillna(1.0)
+    if 'sentiment_score' in df.columns:
+        df['sentiment_score'] = df['sentiment_score'].fillna(0.0)
+        
     # Fill NaN values that result from rolling windows
     df = df.fillna(0)
     return df
@@ -53,8 +59,16 @@ def create_sequences(df: pd.DataFrame, lookback: int = 60) -> Tuple[np.ndarray, 
     Creates sequences of 'lookback' length for training.
     Returns: X (features), y_dir (Direction: 1 for UP, 0 for DOWN), y_price (Next Close), and the fitted scaler.
     """
-    features = ['open', 'high', 'low', 'close', 'volume', 'SMA_10', 'SMA_20', 'RSI_14', 'MACD', 'MACD_Signal', 'ROC_5']
+    features = ['open', 'high', 'low', 'close', 'volume', 'SMA_10', 'SMA_20', 'RSI_14', 'MACD', 'MACD_Signal', 'ROC_5', 'pcr_ratio', 'sentiment_score']
     
+    # Check if all features exist, if not create them with defaults (for backwards compatibility)
+    for feature in features:
+        if feature not in df.columns:
+            if feature == 'pcr_ratio':
+                df[feature] = 1.0
+            else:
+                df[feature] = 0.0
+                
     if len(df) < lookback + 1:
         logger.warning(f"Not enough data to create sequences of length {lookback}")
         return np.array([]), np.array([]), np.array([]), None

@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ArrowUpCircle, ArrowDownCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert, BarChart3, Newspaper } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -41,6 +41,8 @@ interface MarketData {
   open: number;
   high: number;
   low: number;
+  pcr_ratio?: number;
+  sentiment_score?: number;
 }
 
 export default function Dashboard() {
@@ -119,6 +121,9 @@ export default function Dashboard() {
   }
 
   const isBuy = prediction?.predicted_direction === 'BUY';
+  const latestData = marketData.length > 0 ? marketData[marketData.length - 1] : null;
+  const pcr = latestData?.pcr_ratio ?? 1.0;
+  const sentiment = latestData?.sentiment_score ?? 0.0;
 
   return (
     <main className="min-h-screen p-6 md:p-10 max-w-7xl mx-auto">
@@ -194,6 +199,48 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+          
+          {/* Advanced Metrics Card */}
+          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden group hover:border-white/10 transition-colors">
+            <h2 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Advanced Indicators</h2>
+            
+            <div className="space-y-5">
+              <div>
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-gray-300 flex items-center gap-2 font-medium">
+                    <BarChart3 size={16} className="text-purple-400" /> Put-Call Ratio (PCR)
+                  </span>
+                  <span className={`font-mono font-bold ${pcr > 1.2 ? 'text-green-400' : pcr < 0.8 ? 'text-red-400' : 'text-gray-200'}`}>
+                    {pcr.toFixed(2)}
+                  </span>
+                </div>
+                <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                  <div className={`h-full ${pcr > 1.2 ? 'bg-green-500' : pcr < 0.8 ? 'bg-red-500' : 'bg-gray-400'}`} style={{ width: `${Math.min(Math.max((pcr / 2) * 100, 10), 100)}%` }}></div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {pcr > 1.2 ? 'Bullish (Put writers active)' : pcr < 0.8 ? 'Bearish (Call writers active)' : 'Neutral market sentiment'}
+                </p>
+              </div>
+              
+              <div>
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-gray-300 flex items-center gap-2 font-medium">
+                    <Newspaper size={16} className="text-indigo-400" /> News Sentiment
+                  </span>
+                  <span className={`font-mono font-bold ${sentiment > 0.1 ? 'text-green-400' : sentiment < -0.1 ? 'text-red-400' : 'text-gray-200'}`}>
+                    {sentiment > 0 ? '+' : ''}{sentiment.toFixed(2)}
+                  </span>
+                </div>
+                <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden flex">
+                  <div className="h-full bg-red-500" style={{ width: `${sentiment < 0 ? Math.abs(sentiment) * 100 : 0}%`, marginLeft: 'auto' }}></div>
+                  <div className="h-full bg-green-500" style={{ width: `${sentiment > 0 ? sentiment * 100 : 0}%` }}></div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {sentiment > 0.1 ? 'Positive news flow' : sentiment < -0.1 ? 'Negative news flow' : 'Neutral news flow'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

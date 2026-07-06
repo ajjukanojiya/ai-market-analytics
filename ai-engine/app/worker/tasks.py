@@ -54,6 +54,9 @@ def fetch_nifty_live_data():
             
             records_added = 0
             
+            from app.services.options_service import options_service
+            from app.services.sentiment_service import sentiment_service
+            
             for i in range(len(times)):
                 # Convert timestamp from Dhan (which is usually a string or epoch)
                 timestamp = dhan_service.dhan.convert_to_date_time(times[i])
@@ -66,6 +69,11 @@ def fetch_nifty_live_data():
                 ).first()
                 
                 if not existing:
+                    # Fetch Advanced Features (Milestone 6)
+                    # We only fetch this once per missing candle (usually just the latest one)
+                    pcr_ratio = options_service.get_live_pcr("NIFTY 50")
+                    sentiment_score = sentiment_service.get_live_sentiment("NIFTY")
+                    
                     new_candle = MarketData(
                         asset_id=nifty.id,
                         timestamp=timestamp,
@@ -74,7 +82,10 @@ def fetch_nifty_live_data():
                         high=highs[i],
                         low=lows[i],
                         close=closes[i],
-                        volume=volumes[i] if volumes else 0
+                        volume=volumes[i] if volumes else 0,
+                        oi=0,
+                        pcr_ratio=pcr_ratio,
+                        sentiment_score=sentiment_score
                     )
                     db.add(new_candle)
                     records_added += 1
