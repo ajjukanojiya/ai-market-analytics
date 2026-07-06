@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-
+from datetime import datetime, timedelta
 from dhanhq import DhanContext, dhanhq
 
 load_dotenv()
@@ -8,22 +8,21 @@ load_dotenv()
 client_id = os.getenv("DHAN_CLIENT_ID")
 access_token = os.getenv("DHAN_ACCESS_TOKEN")
 
-print("Connecting to Dhan...")
+context = DhanContext(client_id, access_token)
+dhan = dhanhq(context)
 
-dhan_context = DhanContext(
-    client_id=client_id,
-    access_token=access_token
-)
+print("✅ Connected")
 
-dhan = dhanhq(dhan_context)
+today = datetime.now().strftime("%Y-%m-%d")
+yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-print("✅ Dhan Connected")
-
-print("Downloading Security Master...")
-
-response = dhan.fetch_security_list(
-    mode="compact",
-    filename="data/security_id_list.csv"
+response = dhan.intraday_minute_data(
+    security_id="2885",
+    exchange_segment=dhanhq.NSE,
+    instrument_type="EQUITY",
+    from_date=yesterday,
+    to_date=today,
+    interval=5
 )
 
 print(response)
