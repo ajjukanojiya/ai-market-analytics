@@ -6,6 +6,7 @@ from app.models.market_data import MarketData
 from app.models.prediction import Prediction
 from app.models.asset import Asset
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone, timedelta
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -29,6 +30,8 @@ def get_db():
     finally:
         db.close()
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
 @app.get("/")
 def root():
     return {"message": "Welcome to AI Market Analytics Engine API"}
@@ -49,6 +52,11 @@ def get_latest_market_data(db: Session = Depends(get_db)):
     for d in reversed(data):
         item = d.__dict__.copy()
         item.pop('_sa_instance_state', None)
+        
+        # Ensure timezone is IST so frontend displays it correctly
+        if isinstance(item.get('timestamp'), datetime) and item['timestamp'].tzinfo is None:
+            item['timestamp'] = item['timestamp'].replace(tzinfo=IST)
+            
         result.append(item)
     return {"data": result}
 
@@ -65,4 +73,9 @@ def get_latest_prediction(db: Session = Depends(get_db)):
         
     pred_dict = pred.__dict__
     pred_dict.pop('_sa_instance_state', None)
+    
+    # Ensure timezone is IST so frontend displays it correctly
+    if isinstance(pred_dict.get('timestamp'), datetime) and pred_dict['timestamp'].tzinfo is None:
+        pred_dict['timestamp'] = pred_dict['timestamp'].replace(tzinfo=IST)
+        
     return {"prediction": pred_dict}

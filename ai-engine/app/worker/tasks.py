@@ -45,7 +45,8 @@ def fetch_nifty_live_data():
         # The data format usually contains 'start_Time', 'open', 'high', 'low', 'close', 'volume'
         # Dhan returns lists of these values.
         try:
-            times = data.get("start_Time", [])
+            # Dhan API returns 'timestamp' for the epoch times
+            times = data.get("timestamp", data.get("start_Time", []))
             opens = data.get("open", [])
             highs = data.get("high", [])
             lows = data.get("low", [])
@@ -56,10 +57,18 @@ def fetch_nifty_live_data():
             
             from app.services.options_service import options_service
             from app.services.sentiment_service import sentiment_service
+            from datetime import timezone, timedelta
+            
+            IST = timezone(timedelta(hours=5, minutes=30))
             
             for i in range(len(times)):
                 # Convert timestamp from Dhan (which is usually a string or epoch)
-                timestamp = dhan_service.dhan.convert_to_date_time(times[i])
+                raw_timestamp = times[i]
+                timestamp = dhan_service.dhan.convert_to_date_time(raw_timestamp)
+                
+                # Make it timezone aware (IST) so SQLAlchemy handles it properly
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=IST)
                 
                 # Check if this candle already exists in our DB to avoid duplicates
                 existing = db.query(MarketData).filter(
