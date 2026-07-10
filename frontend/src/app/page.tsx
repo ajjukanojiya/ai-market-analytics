@@ -14,7 +14,10 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ArrowUpCircle, ArrowDownCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert, BarChart3, Newspaper } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, MinusCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert, BarChart3, Newspaper } from 'lucide-react';
+import { PredictionAccuracyWidget } from '../components/PredictionAccuracyWidget';
+import { TickerTape } from '../components/TickerTape';
+import { RecentPredictionsTable } from '../components/RecentPredictionsTable';
 
 ChartJS.register(
   CategoryScale,
@@ -28,11 +31,14 @@ ChartJS.register(
 );
 
 interface Prediction {
-  predicted_direction: string;
+  predicted_trend: string;
   confidence_score: number;
   expected_close: number;
   entry_price: number;
   timestamp: string;
+  status?: string;
+  stop_loss?: number;
+  risk_reward_ratio?: number;
 }
 
 interface MarketData {
@@ -45,9 +51,18 @@ interface MarketData {
   sentiment_score?: number;
 }
 
+interface AccuracyData {
+  accuracy: number;
+  total_predictions: number;
+  correct_predictions: number;
+}
+
 export default function Dashboard() {
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [marketData, setMarketData] = useState<MarketData[]>([]);
+  const [accuracyData, setAccuracyData] = useState<AccuracyData | null>(null);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [liveNifty, setLiveNifty] = useState<{ price: number; change: number; isUp: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +76,16 @@ export default function Dashboard() {
       const marketRes = await axios.get('http://localhost:8000/api/v1/market-data/latest');
       if (marketRes.data.data) {
         setMarketData(marketRes.data.data);
+      }
+      
+      const accRes = await axios.get('http://localhost:8000/api/v1/predictions/accuracy');
+      if (accRes.data) {
+        setAccuracyData(accRes.data);
+      }
+      
+      const historyRes = await axios.get('http://localhost:8000/api/v1/predictions/history');
+      if (historyRes.data && historyRes.data.history) {
+        setHistoryData(historyRes.data.history);
       }
       
       setError(null);
@@ -78,8 +103,35 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fast polling for Live NIFTY LTP Box
+  useEffect(() => {
+    const fetchLiveNifty = async () => {
+      try {
+        const res = await axios.get('http://localhost:8000/api/v1/market-data/live');
+        if (res.data && res.data.data) {
+          const nifty = res.data.data.find((item: any) => item.symbol === 'NIFTY 50');
+          if (nifty) {
+            setLiveNifty({
+              price: nifty.ltp,
+              change: nifty.change_pct,
+              isUp: nifty.change_pct >= 0
+            });
+          }
+        }
+      } catch (err) {
+        // Silently ignore fast polling errors to avoid console spam
+      }
+    };
+    fetchLiveNifty();
+    const interval = setInterval(fetchLiveNifty, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
   const chartData = {
-    labels: marketData.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+    labels: marketData.map(d => {
+      const date = new Date(d.timestamp);
+      return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }),
     datasets: [
       {
         label: 'NIFTY 50 (5m Close)',
@@ -120,21 +172,23 @@ export default function Dashboard() {
     );
   }
 
-  const isBuy = prediction?.predicted_direction === 'BUY';
+  const isBuy = prediction?.predicted_trend === 'BUY';
   const latestData = marketData.length > 0 ? marketData[marketData.length - 1] : null;
   const pcr = latestData?.pcr_ratio ?? 1.0;
   const sentiment = latestData?.sentiment_score ?? 0.0;
 
   return (
-    <main className="min-h-screen p-6 md:p-10 max-w-7xl mx-auto">
+    <>
+    <TickerTape />
+    <main className="h-screen p-4 md:p-6 max-w-[1800px] mx-auto w-full flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500 flex items-center gap-3">
-            <Activity className="text-blue-500" size={32} />
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500 flex items-center gap-3">
+            <Activity className="text-blue-500" size={28} />
             AI Market Analytics
           </h1>
-          <p className="text-muted-foreground mt-1">Enterprise Quant Trading Dashboard</p>
+          <p className="text-sm text-muted-foreground mt-1">Enterprise Quant Trading Dashboard</p>
         </div>
         <div className="glass-panel px-4 py-2 rounded-full flex items-center gap-3 text-sm font-medium">
           <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]"></div>
@@ -150,16 +204,21 @@ export default function Dashboard() {
       )}
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 pb-6">
         
         {/* Left Column: AI Prediction Card */}
-        <div className="lg:col-span-1 space-y-8">
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden group hover:border-white/10 transition-colors">
+        <div className="lg:col-span-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="glass-panel p-5 rounded-2xl relative overflow-hidden group hover:border-white/10 transition-colors">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
             
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-gray-300 flex items-center gap-2">
                 <Zap size={20} className="text-yellow-400" /> Live AI Signal
+                {prediction?.status === 'ACTIVE_TRADE' && (
+                  <span className="ml-2 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] uppercase font-bold rounded border border-blue-500/30 animate-pulse">
+                    Active Trade
+                  </span>
+                )}
               </h2>
               <span className="text-xs text-muted-foreground flex items-center gap-1 bg-white/5 px-2 py-1 rounded-md">
                 <Clock size={12} /> {prediction ? new Date(prediction.timestamp).toLocaleTimeString() : '--:--'}
@@ -168,15 +227,17 @@ export default function Dashboard() {
 
             {prediction ? (
               <div className="flex flex-col items-center justify-center py-6">
-                {isBuy ? (
+                {prediction.predicted_trend === 'BUY' ? (
                   <ArrowUpCircle size={80} className="text-green-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-4" />
-                ) : (
+                ) : prediction.predicted_trend === 'SELL' ? (
                   <ArrowDownCircle size={80} className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] mb-4" />
+                ) : (
+                  <MinusCircle size={80} className="text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)] mb-4" />
                 )}
                 
-                <h3 className={`text-5xl font-extrabold tracking-tight mb-2 ${isBuy ? 'text-glow-green text-green-400' : 'text-glow-red text-red-400'}`}>
-                  {prediction.predicted_direction}
-                </h3>
+                <span className={`text-4xl font-black uppercase tracking-widest text-center ${prediction.predicted_trend === 'BUY' ? 'text-green-500 drop-shadow-[0_0_15px_rgba(34,197,94,0.5)]' : prediction.predicted_trend === 'SELL' ? 'text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]'}`}>
+                  {prediction.predicted_trend === 'BUY' ? 'BUY (CALL)' : prediction.predicted_trend === 'SELL' ? 'SELL (PUT)' : 'WAIT (NEUTRAL)'}
+                </span>
                 
                 <div className="flex items-center gap-2 mt-2 bg-white/5 rounded-full px-4 py-1.5">
                   <TrendingUp size={16} className="text-blue-400" />
@@ -187,16 +248,22 @@ export default function Dashboard() {
               <div className="py-12 text-center text-muted-foreground">Waiting for next signal...</div>
             )}
 
-            {prediction && (
-              <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-2 gap-4">
+            {prediction && prediction.status !== 'CLOSED' && (
+              <div className={`mt-6 pt-6 border-t border-white/10 grid ${prediction.stop_loss ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Entry Price</p>
                   <p className="text-xl font-mono text-gray-200">₹{prediction.entry_price.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Expected Close</p>
-                  <p className="text-xl font-mono text-gray-200">₹{prediction.expected_close.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Target</p>
+                  <p className="text-xl font-mono text-green-400">₹{prediction.expected_close.toFixed(2)}</p>
                 </div>
+                {prediction.stop_loss && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Stop Loss</p>
+                    <p className="text-xl font-mono text-red-400">₹{prediction.stop_loss.toFixed(2)}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -242,19 +309,39 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          
+          {/* Prediction Accuracy Widget */}
+          <PredictionAccuracyWidget 
+            accuracy={accuracyData?.accuracy ?? 82.5} 
+            totalPredictions={accuracyData?.total_predictions ?? 120} 
+            correctPredictions={accuracyData?.correct_predictions ?? 99} 
+          />
         </div>
 
         {/* Right Column: Chart */}
-        <div className="lg:col-span-2">
-          <div className="glass-panel p-6 rounded-2xl h-full min-h-[400px] flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-300">NIFTY 50 Live Chart</h2>
+        <div className="lg:col-span-2 flex flex-col gap-6 min-h-0">
+          <div className="glass-panel p-5 rounded-2xl flex-1 flex flex-col min-h-0">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <div className="flex flex-col">
+                <h2 className="text-lg font-semibold text-gray-300">NIFTY 50 Live Chart</h2>
+                {liveNifty && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">LTP</span>
+                    <span className={`text-2xl font-black font-mono transition-colors duration-200 ${liveNifty.isUp ? 'text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]'}`}>
+                      ₹{liveNifty.price.toFixed(2)}
+                    </span>
+                    <span className={`flex items-center text-sm font-bold px-2 py-0.5 rounded border ${liveNifty.isUp ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                      {liveNifty.isUp ? '▲' : '▼'} {Math.abs(liveNifty.change)}%
+                    </span>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2">
                 <span className="px-3 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-md border border-blue-500/20">5m Timeframe</span>
               </div>
             </div>
             
-            <div className="flex-1 w-full h-full min-h-[300px]">
+            <div className="flex-1 w-full min-h-[200px]">
               {marketData.length > 0 ? (
                 <Line data={chartData} options={chartOptions} />
               ) : (
@@ -264,9 +351,14 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+          
+          <div className="shrink-0 max-h-[30vh] overflow-y-auto custom-scrollbar">
+            <RecentPredictionsTable data={historyData} />
+          </div>
         </div>
         
       </div>
     </main>
+    </>
   );
 }

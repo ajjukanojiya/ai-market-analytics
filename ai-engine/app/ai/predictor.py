@@ -54,20 +54,28 @@ def generate_live_prediction():
         
         dir_pred, dir_prob, price_pred = model.predict(X_live)
         
-        direction = "BUY" if dir_pred[0] == 1 else "SELL"
+        # Original classification confidence
         confidence = dir_prob[0][dir_pred[0]] * 100
         expected_close = float(price_pred[0])
         
         # Get the current close to compare
         current_close = float(latest_window_df.iloc[-1]['close'])
         
+        # FIX LOGICAL CONTRADICTIONS:
+        # Trust the price model over the trend model.
+        if expected_close > current_close:
+            direction = "BUY"
+        else:
+            direction = "SELL"
+            
         logger.info(f"AI Prediction for next candle: {direction} with {confidence:.1f}% confidence. Expected Close: ₹{expected_close:.2f}")
         
+        from datetime import datetime, timezone
         # Save prediction to DB
         pred = Prediction(
             asset_id=nifty.id,
             prediction_timeframe="5m",
-            timestamp=pd.Timestamp.now(), # Approximate time of prediction
+            timestamp=datetime.now(timezone.utc), # Ensure UTC timezone-aware
             predicted_trend=direction,
             expected_close=expected_close,
             confidence_score=confidence,

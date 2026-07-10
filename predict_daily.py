@@ -22,10 +22,22 @@ def create_predictions_table(cursor):
         prediction_for_date DATE,
         predicted_price DECIMAL(15, 4),
         actual_price DECIMAL(15, 4) NULL,
+        confidence_score DECIMAL(5, 2) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
     cursor.execute(query)
+
+    # Ensure the column exists if the table was created before
+    alter_query = """
+    ALTER TABLE stock_predictions 
+    ADD COLUMN confidence_score DECIMAL(5, 2) NULL;
+    """
+    try:
+        cursor.execute(alter_query)
+    except Exception as e:
+        # Ignore error if column already exists or syntax not supported in older MySQL
+        pass
 
 def main():
     SYMBOL = sys.argv[1] if len(sys.argv) > 1 else 'SBIN.NS'
@@ -94,18 +106,48 @@ def main():
         dummy_array[0, 0] = predicted_scaled[0][0] # Put scaled prediction in 'close' column
         predicted_price = scaler.inverse_transform(dummy_array)[0][0]
         
+        # --- Calculate Confidence Score (Hybrid Approach) ---
+        last_close = float(df['close'].iloc[-1])
+        predicted_move_pct = abs((predicted_price - last_close) / last_close) * 100
+        current_rsi = float(df['rsi'].iloc[-1])
+        
+        # Base confidence starts at 60%
+        confidence = 60.0
+        
+        # 1. RSI Factor: Normal RSI (40-60) is trend-following (more confident). 
+        # Extreme RSI (<30 or >70) might indicate reversal, slightly lower confidence if predicting continuation.
+        if 40 <= current_rsi <= 60:
+            confidence += 15
+        elif 30 < current_rsi < 40 or 60 < current_rsi < 70:
+            confidence += 5
+        else:
+            confidence -= 10 # Extreme RSI, lower confidence
+            
+        # 2. Movement Factor: If predicted move is between 0.5% and 2%, it's a realistic daily move.
+        if 0.5 <= predicted_move_pct <= 2.0:
+            confidence += 15
+        elif predicted_move_pct > 3.0:
+            confidence -= 15 # Too large move, suspicious for daily
+        else:
+            confidence += 5
+            
+        # Cap confidence between 10% and 95%
+        confidence = max(10.0, min(95.0, confidence))
+        # ----------------------------------------------------
+        
         logging.info(f"--- MULTIVARIATE PREDICTION RESULT ---")
         logging.info(f"Symbol: {SYMBOL}")
         logging.info(f"Predicting for date: {next_day}")
         logging.info(f"Predicted Close Price: ₹{predicted_price:.2f}")
+        logging.info(f"Confidence Score: {confidence:.2f}% (RSI: {current_rsi:.2f}, Pred Move: {predicted_move_pct:.2f}%)")
         
         with connection.cursor() as cursor:
             create_predictions_table(cursor)
             insert_query = """
-            INSERT INTO stock_predictions (symbol, prediction_for_date, predicted_price)
-            VALUES (%s, %s, %s)
+            INSERT INTO stock_predictions (symbol, prediction_for_date, predicted_price, confidence_score)
+            VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(insert_query, (SYMBOL, next_day, float(predicted_price)))
+            cursor.execute(insert_query, (SYMBOL, next_day, float(predicted_price), float(confidence)))
             connection.commit()
             logging.info(f"Successfully saved prediction for {next_day}.")
             
