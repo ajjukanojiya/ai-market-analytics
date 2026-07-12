@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .env
 data/
-models/
+/models/
 celerybeat-schedule*
 *.log
 temp*.txt
