@@ -14,10 +14,11 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ArrowUpCircle, ArrowDownCircle, MinusCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert, BarChart3, Newspaper } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, MinusCircle, Activity, Clock, Zap, TrendingUp, ShieldAlert, BarChart3, Newspaper, Settings } from 'lucide-react';
 import { PredictionAccuracyWidget } from '../components/PredictionAccuracyWidget';
 import { TickerTape } from '../components/TickerTape';
 import { RecentPredictionsTable } from '../components/RecentPredictionsTable';
+import { SettingsModal } from '../components/SettingsModal';
 
 ChartJS.register(
   CategoryScale,
@@ -39,6 +40,12 @@ interface Prediction {
   status?: string;
   stop_loss?: number;
   risk_reward_ratio?: number;
+  confidence_stars?: number;
+  ai_reasoning?: string[];
+  entry_zone_low?: number;
+  entry_zone_high?: number;
+  expected_move_points?: number;
+  expected_move_probability?: number;
 }
 
 interface MarketData {
@@ -65,25 +72,34 @@ export default function Dashboard() {
   const [liveNifty, setLiveNifty] = useState<{ price: number; change: number; isUp: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [lastDataFetch, setLastDataFetch] = useState<number>(Date.now());
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 
   const fetchData = async () => {
     try {
-      const predRes = await axios.get('http://localhost:8000/api/v1/predictions/latest');
+      const predRes = await axios.get(`${API_URL}/api/v1/predictions/latest`);
       if (predRes.data.prediction) {
         setPrediction(predRes.data.prediction);
       }
 
-      const marketRes = await axios.get('http://localhost:8000/api/v1/market-data/latest');
-      if (marketRes.data.data) {
+      const marketRes = await axios.get(`${API_URL}/api/v1/market-data/latest`);
+      if (marketRes.data.data && marketRes.data.data.length > 0) {
         setMarketData(marketRes.data.data);
+        
+        // Update last fetch time for Smart Health Indicator based on candle time or fetch success
+        const latestCandle = new Date(marketRes.data.data[0].timestamp).getTime();
+        setLastDataFetch(latestCandle);
       }
       
-      const accRes = await axios.get('http://localhost:8000/api/v1/predictions/accuracy');
+      const accRes = await axios.get(`${API_URL}/api/v1/predictions/accuracy`);
       if (accRes.data) {
         setAccuracyData(accRes.data);
       }
       
-      const historyRes = await axios.get('http://localhost:8000/api/v1/predictions/history');
+      const historyRes = await axios.get(`${API_URL}/api/v1/predictions/history`);
       if (historyRes.data && historyRes.data.history) {
         setHistoryData(historyRes.data.history);
       }
@@ -103,28 +119,43 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fast polling for Live NIFTY LTP Box
+  // Fast WebSocket for Live NIFTY LTP Box
   useEffect(() => {
-    const fetchLiveNifty = async () => {
-      try {
-        const res = await axios.get('http://localhost:8000/api/v1/market-data/live');
-        if (res.data && res.data.data) {
-          const nifty = res.data.data.find((item: any) => item.symbol === 'NIFTY 50');
-          if (nifty) {
-            setLiveNifty({
-              price: nifty.ltp,
-              change: nifty.change_pct,
-              isUp: nifty.change_pct >= 0
-            });
+    let ws: WebSocket;
+    
+    const connectWs = () => {
+      ws = new WebSocket(`${WS_URL}/api/v1/ws/market-data`);
+      
+      ws.onmessage = (event) => {
+        try {
+          const res = JSON.parse(event.data);
+          if (res.status === 'live' && res.data) {
+            const nifty = res.data.find((item: any) => item.symbol === 'NIFTY 50');
+            if (nifty) {
+              setLiveNifty({
+                price: nifty.ltp,
+                change: nifty.change_pct,
+                isUp: nifty.change_pct >= 0
+              });
+            }
           }
+        } catch (err) {
+          // silently ignore parse errors
         }
-      } catch (err) {
-        // Silently ignore fast polling errors to avoid console spam
+      };
+
+      ws.onclose = () => {
+        setTimeout(connectWs, 1000);
+      };
+    };
+
+    connectWs();
+    
+    return () => {
+      if (ws) {
+        ws.close();
       }
     };
-    fetchLiveNifty();
-    const interval = setInterval(fetchLiveNifty, 1500);
-    return () => clearInterval(interval);
   }, []);
 
   const chartData = {
@@ -177,8 +208,47 @@ export default function Dashboard() {
   const pcr = latestData?.pcr_ratio ?? 1.0;
   const sentiment = latestData?.sentiment_score ?? 0.0;
 
+  // Smart Health Indicator Logic
+  const timeSinceLastData = (Date.now() - lastDataFetch) / 1000 / 60; // in minutes
+  const currentHour = new Date().getHours();
+  const currentMinute = new Date().getMinutes();
+  const isMarketOpen = (currentHour > 9 || (currentHour === 9 && currentMinute >= 15)) && 
+                       (currentHour < 15 || (currentHour === 15 && currentMinute < 30));
+  const isDataStale = isMarketOpen && timeSinceLastData > 10;
+  
+  let systemStatusColor = 'bg-green-500';
+  let systemStatusText = 'System Online';
+  let pulseClass = 'animate-pulse';
+  
+  if (error) {
+    systemStatusColor = 'bg-red-500';
+    systemStatusText = 'API Error';
+  } else if (!isMarketOpen) {
+    systemStatusColor = 'bg-yellow-500';
+    systemStatusText = 'Market Closed';
+    pulseClass = ''; // Don't pulse when closed
+  } else if (isDataStale) {
+    systemStatusColor = 'bg-red-500';
+    systemStatusText = 'Data Stale';
+  }
+
+  // Live Validation Logic
+  let liveValidation = null;
+  if (prediction && prediction.status === 'ACTIVE_TRADE' && liveNifty && prediction.entry_zone_low && prediction.entry_zone_high) {
+    if (liveNifty.price >= prediction.entry_zone_low && liveNifty.price <= prediction.entry_zone_high) {
+      liveValidation = { text: '🟢 Perfect Entry', color: 'text-green-400 border-green-500/20 bg-green-500/10' };
+    } else if (prediction.predicted_trend === 'BUY') {
+      if (liveNifty.price < prediction.entry_zone_low) liveValidation = { text: '🟡 Wait for Entry', color: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10' };
+      else liveValidation = { text: '🔴 Entry Missed', color: 'text-red-400 border-red-500/20 bg-red-500/10' };
+    } else if (prediction.predicted_trend === 'SELL') {
+      if (liveNifty.price > prediction.entry_zone_high) liveValidation = { text: '🟡 Wait for Entry', color: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10' };
+      else liveValidation = { text: '🔴 Entry Missed', color: 'text-red-400 border-red-500/20 bg-red-500/10' };
+    }
+  }
+
   return (
     <>
+    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     <TickerTape />
     <main className="h-screen p-4 md:p-6 max-w-[1800px] mx-auto w-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -190,9 +260,14 @@ export default function Dashboard() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Enterprise Quant Trading Dashboard</p>
         </div>
-        <div className="glass-panel px-4 py-2 rounded-full flex items-center gap-3 text-sm font-medium">
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]"></div>
-          System Online
+        <div className="flex gap-3">
+          <button onClick={() => setIsSettingsOpen(true)} className="glass-panel px-3 py-2 rounded-full hover:bg-white/5 transition-colors">
+            <Settings size={18} className="text-gray-400" />
+          </button>
+          <div className="glass-panel px-4 py-2 rounded-full flex items-center gap-3 text-sm font-medium">
+            <div className={`w-2.5 h-2.5 rounded-full ${systemStatusColor} ${pulseClass} shadow-[0_0_10px_rgba(currentColor,0.6)]`}></div>
+            <span className={error || isDataStale ? 'text-red-400' : (!isMarketOpen ? 'text-yellow-400' : 'text-gray-200')}>{systemStatusText}</span>
+          </div>
         </div>
       </header>
 
@@ -242,26 +317,67 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mt-2 bg-white/5 rounded-full px-4 py-1.5">
                   <TrendingUp size={16} className="text-blue-400" />
                   <span className="font-medium text-gray-200">Confidence: <span className="text-white font-bold">{prediction.confidence_score.toFixed(1)}%</span></span>
+                  {prediction.confidence_stars && (
+                    <span className="ml-2 text-yellow-400 tracking-widest text-lg leading-none">
+                      {'★'.repeat(prediction.confidence_stars)}{'☆'.repeat(5 - prediction.confidence_stars)}
+                    </span>
+                  )}
                 </div>
+                
+                {liveValidation && (
+                  <div className={`mt-4 px-4 py-1.5 rounded-md border text-sm font-bold ${liveValidation.color}`}>
+                    {liveValidation.text}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-12 text-center text-muted-foreground">Waiting for next signal...</div>
             )}
 
             {prediction && prediction.status !== 'CLOSED' && (
-              <div className={`mt-6 pt-6 border-t border-white/10 grid ${prediction.stop_loss ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Entry Price</p>
-                  <p className="text-xl font-mono text-gray-200">₹{prediction.entry_price.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Target</p>
-                  <p className="text-xl font-mono text-green-400">₹{prediction.expected_close.toFixed(2)}</p>
-                </div>
-                {prediction.stop_loss && (
+              <div className="mt-4 space-y-4">
+                <div className={`pt-4 border-t border-white/10 grid ${prediction.stop_loss ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Stop Loss</p>
-                    <p className="text-xl font-mono text-red-400">₹{prediction.stop_loss.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Entry Zone</p>
+                    <p className="text-[15px] font-mono text-gray-200">
+                      {prediction.entry_zone_low ? `₹${prediction.entry_zone_low.toFixed(0)} - ${prediction.entry_zone_high?.toFixed(0)}` : `₹${prediction.entry_price.toFixed(2)}`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Target</p>
+                    <p className="text-[15px] font-mono text-green-400">₹{prediction.expected_close.toFixed(2)}</p>
+                  </div>
+                  {prediction.stop_loss && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Stop Loss</p>
+                      <p className="text-[15px] font-mono text-red-400">₹{prediction.stop_loss.toFixed(2)}</p>
+                    </div>
+                  )}
+                </div>
+                
+                {prediction.ai_reasoning && (
+                  <div className="pt-4 border-t border-white/10">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">AI Reasoning</p>
+                    <ul className="space-y-1.5">
+                      {prediction.ai_reasoning.map((reason, idx) => (
+                        <li key={idx} className="text-sm text-gray-300 flex items-start gap-2">
+                          <span className="text-green-500 mt-0.5">✓</span> {reason.replace('✓', '').trim()}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {prediction.expected_move_points && (
+                  <div className="pt-4 border-t border-white/10 flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Expected Move</p>
+                      <p className="text-lg font-bold text-blue-400">+{prediction.expected_move_points} Points</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Probability</p>
+                      <p className="text-lg font-bold text-gray-200">{prediction.expected_move_probability}%</p>
+                    </div>
                   </div>
                 )}
               </div>

@@ -21,26 +21,52 @@ export function TickerTape() {
   const [liveTickers, setLiveTickers] = useState<TickerData[]>([]);
 
   useEffect(() => {
-    const fetchLiveQuotes = async () => {
-      try {
-        const res = await axios.get('http://localhost:8000/api/v1/market-data/live');
-        if (res.data && res.data.data) {
-          const formatted = res.data.data.map((item: any) => ({
-            symbol: item.symbol,
-            price: item.ltp,
-            change: item.change_pct,
-            isUp: item.change_pct >= 0
-          }));
-          setLiveTickers(formatted);
+    let ws: WebSocket;
+    const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+    
+    const connectWs = () => {
+      ws = new WebSocket(`${WS_URL}/api/v1/ws/market-data`);
+      
+      ws.onmessage = (event) => {
+        try {
+          const res = JSON.parse(event.data);
+          if (res.status === 'live' && res.data) {
+            const formatted = res.data.map((item: any) => ({
+              symbol: item.symbol,
+              price: item.ltp,
+              change: item.change_pct,
+              isUp: item.change_pct >= 0
+            }));
+            
+            // Merge with existing live tickers to keep non-updated ones
+            setLiveTickers(prev => {
+              const updated = [...prev];
+              formatted.forEach((newT: any) => {
+                const idx = updated.findIndex(t => t.symbol === newT.symbol);
+                if (idx >= 0) updated[idx] = newT;
+                else updated.push(newT);
+              });
+              return updated;
+            });
+          }
+        } catch (err) {
+          console.error("WS Parse error", err);
         }
-      } catch (err) {
-        console.error("Live feed error:", err);
-      }
+      };
+
+      ws.onclose = () => {
+        // Reconnect after 1 second
+        setTimeout(connectWs, 1000);
+      };
     };
 
-    fetchLiveQuotes();
-    const interval = setInterval(fetchLiveQuotes, 1500); // Fast polling 1.5s
-    return () => clearInterval(interval);
+    connectWs();
+    
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
   }, []);
 
   const displayTickers = liveTickers.length > 0 ? [...liveTickers, ...STATIC_TICKERS] : STATIC_TICKERS;
