@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine, Base
 from app.models.market_data import MarketData
 from app.models.prediction import Prediction
 from app.models.asset import Asset
@@ -34,6 +34,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
+    # Create DB tables if they don't exist
+    Base.metadata.create_all(bind=engine)
     # Start Dhan live feed connection in background
     dhan_service.start_live_feed()
 
