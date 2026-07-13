@@ -36,10 +36,9 @@ class DhanService:
         os.environ["DHAN_CLIENT_ID"] = client_id
         os.environ["DHAN_ACCESS_TOKEN"] = access_token
         
-        # Restart WebSocket if it was running
-        if hasattr(self, 'ws_thread') and self.ws_thread:
-            self.stop_live_feed()
-            self.start_live_feed()
+        # Restart or start WebSocket live feed
+        self.stop_live_feed()
+        self.start_live_feed()
             
     def _on_ws_message(self, ws, message):
         from app.services.ws_manager import manager
