@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Market Analytics Engine"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
+    TEST_MODE: bool = False
 
     # PostgreSQL Database
     POSTGRES_USER: str = "postgres"

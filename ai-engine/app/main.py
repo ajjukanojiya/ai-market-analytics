@@ -36,6 +36,31 @@ app.add_middleware(
 def startup_event():
     # Create DB tables if they don't exist
     Base.metadata.create_all(bind=engine)
+    
+    # Initialize default assets (e.g., NIFTY 50 and CRUDEOIL) if missing
+    db = SessionLocal()
+    try:
+        for sym, name, a_type, exch in [
+            ("NIFTY 50", "Nifty 50 Index", "INDEX", "NSE"),
+            ("CRUDEOIL", "Crude Oil", "COMMODITY", "MCX")
+        ]:
+            asset = db.query(Asset).filter(Asset.symbol == sym).first()
+            if not asset:
+                asset = Asset(
+                    symbol=sym,
+                    name=name,
+                    asset_type=a_type,
+                    exchange=exch,
+                    is_active=True
+                )
+                db.add(asset)
+        db.commit()
+    except Exception as e:
+        print(f"Error initializing default assets: {e}")
+        db.rollback()
+    finally:
+        db.close()
+        
     # Start Dhan live feed connection in background
     dhan_service.start_live_feed()
 
@@ -80,11 +105,11 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @app.get(f"{settings.API_V1_STR}/market-data/latest")
-def get_latest_market_data(db: Session = Depends(get_db)):
+def get_latest_market_data(symbol: str = "NIFTY 50", db: Session = Depends(get_db)):
     """Fetch the latest 50 candles for the frontend chart."""
-    nifty = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
+    nifty = db.query(Asset).filter(Asset.symbol == symbol).first()
     if not nifty:
-        return {"error": "NIFTY 50 not found"}
+        return {"error": f"{symbol} not found"}
         
     data = db.query(MarketData).filter(MarketData.asset_id == nifty.id).order_by(MarketData.timestamp.desc()).limit(50).all()
     result = []
@@ -100,11 +125,11 @@ def get_latest_market_data(db: Session = Depends(get_db)):
     return {"data": result}
 
 @app.get(f"{settings.API_V1_STR}/predictions/latest")
-def get_latest_prediction(db: Session = Depends(get_db)):
+def get_latest_prediction(symbol: str = "NIFTY 50", db: Session = Depends(get_db)):
     """Fetch the most recent AI prediction."""
-    nifty = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
+    nifty = db.query(Asset).filter(Asset.symbol == symbol).first()
     if not nifty:
-        return {"error": "NIFTY 50 not found"}
+        return {"error": f"{symbol} not found"}
         
     pred = db.query(Prediction).filter(Prediction.asset_id == nifty.id).order_by(Prediction.timestamp.desc()).first()
     if not pred:
@@ -118,11 +143,16 @@ def get_latest_prediction(db: Session = Depends(get_db)):
         # Force the DB time to be interpreted as IST without shifting hours
         pred_dict['timestamp'] = pred_dict['timestamp'].replace(tzinfo=IST)
         
-    # INTRADAY AUTO-CLOSE LOGIC (3:15 PM)
+    # INTRADAY AUTO-CLOSE LOGIC
     now_ist = datetime.now(IST)
-    is_market_closed = now_ist.hour > 15 or (now_ist.hour == 15 and now_ist.minute >= 15)
+    if symbol == "CRUDEOIL":
+        # MCX is open till 11:30 PM (23:30)
+        is_market_closed = now_ist.hour >= 23 and now_ist.minute >= 30
+    else:
+        # NSE is open till 3:30 PM (15:30)
+        is_market_closed = now_ist.hour > 15 or (now_ist.hour == 15 and now_ist.minute >= 15)
     
-    if is_market_closed:
+    if is_market_closed and not settings.TEST_MODE:
         pred_dict['status'] = 'CLOSED'
         pred_dict['predicted_trend'] = 'NEUTRAL'
         return {"prediction": pred_dict}
@@ -177,11 +207,11 @@ def is_prediction_win(p_id: int) -> bool:
     return (p_id * 37) % 100 <= 82
 
 @app.get(f"{settings.API_V1_STR}/predictions/accuracy")
-def get_prediction_accuracy(db: Session = Depends(get_db)):
+def get_prediction_accuracy(symbol: str = "NIFTY 50", db: Session = Depends(get_db)):
     """Fetch the overall model performance/accuracy metrics."""
-    nifty = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
+    nifty = db.query(Asset).filter(Asset.symbol == symbol).first()
     if not nifty:
-        return {"error": "NIFTY 50 not found"}
+        return {"error": f"{symbol} not found"}
         
     preds = db.query(Prediction.id).filter(Prediction.asset_id == nifty.id).all()
     total_predictions = len(preds)
@@ -205,11 +235,11 @@ def get_prediction_accuracy(db: Session = Depends(get_db)):
     }
 
 @app.get(f"{settings.API_V1_STR}/predictions/history")
-def get_prediction_history(db: Session = Depends(get_db)):
+def get_prediction_history(symbol: str = "NIFTY 50", db: Session = Depends(get_db)):
     """Fetch recent predictions history for the frontend table."""
-    nifty = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
+    nifty = db.query(Asset).filter(Asset.symbol == symbol).first()
     if not nifty:
-        return {"error": "NIFTY 50 not found"}
+        return {"error": f"{symbol} not found"}
         
     preds = db.query(Prediction).filter(Prediction.asset_id == nifty.id).order_by(Prediction.timestamp.desc()).limit(50).all()
     
@@ -282,7 +312,7 @@ def get_prediction_history(db: Session = Depends(get_db)):
         result.append({
             "date": date_str,
             "time": time_str,
-            "symbol": "NIFTY 50",
+            "symbol": symbol,
             "signal": predicted_trend,
             "confidence": round(p.confidence_score, 1),
             "margin": margin,
@@ -309,6 +339,18 @@ def get_live_market_data(db: Session = Depends(get_db)):
     
     # SMART FALLBACK SIMULATION (Since we are on local/laptop and Dhan API quote was failing)
     # Get last known close for NIFTY to base simulation on reality
+    # Get last known close for symbol to base simulation on reality
+    symbol = "NIFTY 50" # Assuming default, though frontend can subscribe to crude
+    # Wait, we want to return both, or just add crude to the list!
+    
+    # Let's just return CRUDEOIL in the live_data array.
+    crude = db.query(Asset).filter(Asset.symbol == "CRUDEOIL").first()
+    last_crude = 6500.0
+    if crude:
+        last_candle_crude = db.query(MarketData).filter(MarketData.asset_id == crude.id).order_by(MarketData.timestamp.desc()).first()
+        if last_candle_crude:
+            last_crude = last_candle_crude.close
+
     nifty = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
     last_nifty = 24000.0
     if nifty:
@@ -316,13 +358,12 @@ def get_live_market_data(db: Session = Depends(get_db)):
         if last_candle:
             last_nifty = last_candle.close
 
-    # Generate realistic sub-second fluctuations ONLY during market hours
     now_ist = datetime.now(IST)
-    is_market_open = (now_ist.hour > 9 or (now_ist.hour == 9 and now_ist.minute >= 15)) and \
-                     (now_ist.hour < 15 or (now_ist.hour == 15 and now_ist.minute < 30))
-    
-    if is_market_open:
-        # Jitter is +/- 0.05% max
+    is_market_open = (now_ist.hour > 9 or (now_ist.hour == 9 and now_ist.minute >= 15)) and                      (now_ist.hour < 15 or (now_ist.hour == 15 and now_ist.minute < 30))
+                     
+    is_mcx_open = (now_ist.hour >= 9) and (now_ist.hour < 23 or (now_ist.hour == 23 and now_ist.minute <= 30))
+
+    if is_market_open or settings.TEST_MODE:
         nifty_jitter = last_nifty * (random.uniform(-0.0002, 0.0002))
         banknifty_base = 52300.0
         banknifty_jitter = banknifty_base * (random.uniform(-0.0003, 0.0003))
@@ -334,7 +375,12 @@ def get_live_market_data(db: Session = Depends(get_db)):
         banknifty_jitter = 0
         reliance_base = 3120.0
         reliance_jitter = 0
-    
+        
+    if is_mcx_open or settings.TEST_MODE:
+        crude_jitter = last_crude * (random.uniform(-0.0004, 0.0004))
+    else:
+        crude_jitter = 0
+
     current_time_ms = int(time.time() * 1000)
     
     return {
@@ -355,6 +401,11 @@ def get_live_market_data(db: Session = Depends(get_db)):
                 "symbol": "RELIANCE",
                 "ltp": round(reliance_base + reliance_jitter, 2),
                 "change_pct": round((reliance_jitter / reliance_base) * 100, 2)
+            },
+            {
+                "symbol": "CRUDEOIL",
+                "ltp": round(last_crude + crude_jitter, 2),
+                "change_pct": round((crude_jitter / last_crude) * 100, 2) if last_crude > 0 else 0
             }
         ]
     }

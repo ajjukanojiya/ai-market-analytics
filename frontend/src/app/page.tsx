@@ -65,6 +65,7 @@ interface AccuracyData {
 }
 
 export default function Dashboard() {
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('NIFTY 50');
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [accuracyData, setAccuracyData] = useState<AccuracyData | null>(null);
@@ -80,12 +81,12 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     try {
-      const predRes = await axios.get(`${API_URL}/api/v1/predictions/latest`);
+      const predRes = await axios.get(`${API_URL}/api/v1/predictions/latest?symbol=${selectedSymbol}`);
       if (predRes.data.prediction) {
         setPrediction(predRes.data.prediction);
       }
 
-      const marketRes = await axios.get(`${API_URL}/api/v1/market-data/latest`);
+      const marketRes = await axios.get(`${API_URL}/api/v1/market-data/latest?symbol=${selectedSymbol}`);
       if (marketRes.data.data && marketRes.data.data.length > 0) {
         setMarketData(marketRes.data.data);
         
@@ -94,12 +95,12 @@ export default function Dashboard() {
         setLastDataFetch(latestCandle);
       }
       
-      const accRes = await axios.get(`${API_URL}/api/v1/predictions/accuracy`);
+      const accRes = await axios.get(`${API_URL}/api/v1/predictions/accuracy?symbol=${selectedSymbol}`);
       if (accRes.data) {
         setAccuracyData(accRes.data);
       }
       
-      const historyRes = await axios.get(`${API_URL}/api/v1/predictions/history`);
+      const historyRes = await axios.get(`${API_URL}/api/v1/predictions/history?symbol=${selectedSymbol}`);
       if (historyRes.data && historyRes.data.history) {
         setHistoryData(historyRes.data.history);
       }
@@ -130,12 +131,12 @@ export default function Dashboard() {
         try {
           const res = JSON.parse(event.data);
           if (res.status === 'live' && res.data) {
-            const nifty = res.data.find((item: any) => item.symbol === 'NIFTY 50');
-            if (nifty) {
+            const asset = res.data.find((item: any) => item.symbol === selectedSymbol);
+            if (asset) {
               setLiveNifty({
-                price: nifty.ltp,
-                change: nifty.change_pct,
-                isUp: nifty.change_pct >= 0
+                price: asset.ltp,
+                change: asset.change_pct,
+                isUp: asset.change_pct >= 0
               });
             }
           }
@@ -165,7 +166,7 @@ export default function Dashboard() {
     }),
     datasets: [
       {
-        label: 'NIFTY 50 (5m Close)',
+        label: `${selectedSymbol} (5m Close)`,
         data: marketData.map(d => d.close),
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -212,8 +213,10 @@ export default function Dashboard() {
   const timeSinceLastData = (Date.now() - lastDataFetch) / 1000 / 60; // in minutes
   const currentHour = new Date().getHours();
   const currentMinute = new Date().getMinutes();
-  const isMarketOpen = (currentHour > 9 || (currentHour === 9 && currentMinute >= 15)) && 
-                       (currentHour < 15 || (currentHour === 15 && currentMinute < 30));
+  const isMarketOpen = selectedSymbol === 'CRUDEOIL'
+    ? (currentHour >= 9 && (currentHour < 23 || (currentHour === 23 && currentMinute <= 30)))
+    : ((currentHour > 9 || (currentHour === 9 && currentMinute >= 15)) && 
+       (currentHour < 15 || (currentHour === 15 && currentMinute < 30)));
   const isDataStale = isMarketOpen && timeSinceLastData > 10;
   
   let systemStatusColor = 'bg-green-500';
@@ -261,6 +264,14 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-1">Enterprise Quant Trading Dashboard</p>
         </div>
         <div className="flex gap-3">
+          <select 
+            value={selectedSymbol} 
+            onChange={(e) => setSelectedSymbol(e.target.value)}
+            className="glass-panel px-3 py-1.5 rounded-lg bg-transparent text-sm text-gray-300 border border-white/10 outline-none focus:border-blue-500/50 cursor-pointer"
+          >
+            <option value="NIFTY 50" className="bg-[#18181b]">NIFTY 50 (Index)</option>
+            <option value="CRUDEOIL" className="bg-[#18181b]">CRUDE OIL (MCX)</option>
+          </select>
           <button onClick={() => setIsSettingsOpen(true)} className="glass-panel px-3 py-2 rounded-full hover:bg-white/5 transition-colors">
             <Settings size={18} className="text-gray-400" />
           </button>
@@ -439,7 +450,7 @@ export default function Dashboard() {
           <div className="glass-panel p-5 rounded-2xl flex-1 flex flex-col min-h-0">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <div className="flex flex-col">
-                <h2 className="text-lg font-semibold text-gray-300">NIFTY 50 Live Chart</h2>
+                <h2 className="text-lg font-semibold text-gray-300">{selectedSymbol} Live Chart</h2>
                 {liveNifty && (
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-xs text-muted-foreground uppercase tracking-wider">LTP</span>

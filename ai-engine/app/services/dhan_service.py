@@ -109,6 +109,11 @@ class DhanService:
             if hasattr(self, 'feed') and self.feed:
                 self.feed.close_connection()
             logger.info("Dhan Live MarketFeed WebSocket stopped.")
+        except RuntimeError as e:
+            if "Cannot run the event loop" in str(e):
+                logger.warning("Dhan Live MarketFeed WebSocket stopped (ignoring event loop conflict).")
+            else:
+                logger.error(f"Error stopping Dhan WebSocket: {e}")
         except Exception as e:
             logger.error(f"Error stopping Dhan WebSocket: {e}")
             
