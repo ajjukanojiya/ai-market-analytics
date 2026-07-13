@@ -113,25 +113,7 @@ def get_latest_market_data(symbol: str = "NIFTY 50", db: Session = Depends(get_d
         
     data = db.query(MarketData).filter(MarketData.asset_id == nifty.id).order_by(MarketData.timestamp.desc()).limit(50).all()
     
-    if len(data) == 0 and symbol == "CRUDEOIL":
-        # Generate 50 dummy candles for UI
-        now = datetime.now(IST)
-        dummy_data = []
-        base_price = 6500.0
-        import random
-        for i in range(50):
-            ts = now - timedelta(minutes=5 * (50 - i))
-            close = base_price + random.uniform(-10, 10)
-            dummy_data.append({
-                "timestamp": ts,
-                "open": close - 2,
-                "high": close + 5,
-                "low": close - 5,
-                "close": close,
-                "volume": 1000
-            })
-            base_price = close
-        return {"data": dummy_data}
+    
     result = []
     for d in reversed(data):
         item = d.__dict__.copy()
@@ -450,3 +432,19 @@ def get_live_market_data(db: Session = Depends(get_db)):
             }
         ]
     }
+
+
+@app.get(f"{settings.API_V1_STR}/admin/fetch-data")
+def trigger_fetch_data():
+    """Manually trigger historical data fetch (Useful since Render Free Tier doesn't have shell)"""
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from scripts.fetch_historical import fetch_historical_data
+        
+        # This will fetch real historical data for both NIFTY and CRUDEOIL and save to DB
+        fetch_historical_data(60)
+        return {"status": "success", "message": "Real 60-day historical data fetched successfully!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
