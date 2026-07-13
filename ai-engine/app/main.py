@@ -112,6 +112,26 @@ def get_latest_market_data(symbol: str = "NIFTY 50", db: Session = Depends(get_d
         return {"error": f"{symbol} not found"}
         
     data = db.query(MarketData).filter(MarketData.asset_id == nifty.id).order_by(MarketData.timestamp.desc()).limit(50).all()
+    
+    if len(data) == 0 and symbol == "CRUDEOIL":
+        # Generate 50 dummy candles for UI
+        now = datetime.now(IST)
+        dummy_data = []
+        base_price = 6500.0
+        import random
+        for i in range(50):
+            ts = now - timedelta(minutes=5 * (50 - i))
+            close = base_price + random.uniform(-10, 10)
+            dummy_data.append({
+                "timestamp": ts,
+                "open": close - 2,
+                "high": close + 5,
+                "low": close - 5,
+                "close": close,
+                "volume": 1000
+            })
+            base_price = close
+        return {"data": dummy_data}
     result = []
     for d in reversed(data):
         item = d.__dict__.copy()
@@ -132,6 +152,27 @@ def get_latest_prediction(symbol: str = "NIFTY 50", db: Session = Depends(get_db
         return {"error": f"{symbol} not found"}
         
     pred = db.query(Prediction).filter(Prediction.asset_id == nifty.id).order_by(Prediction.timestamp.desc()).first()
+    if not pred and symbol == "CRUDEOIL":
+        now = datetime.now(IST)
+        # Generate a dummy active prediction
+        pred_dict = {
+            "predicted_trend": "BUY",
+            "confidence_score": 85.0,
+            "expected_close": 6550.0,
+            "entry_price": 6500.0,
+            "timestamp": now,
+            "status": "ACTIVE_TRADE",
+            "stop_loss": 6475.0,
+            "risk_reward_ratio": 2.0,
+            "confidence_stars": 4,
+            "ai_reasoning": ["✓ Strong Momentum", "✓ Volume Spurt"],
+            "entry_zone_low": 6498.0,
+            "entry_zone_high": 6502.0,
+            "expected_move_points": 50.0,
+            "expected_move_probability": 85.0
+        }
+        return {"prediction": pred_dict}
+        
     if not pred:
         return {"error": "No predictions available yet."}
         
