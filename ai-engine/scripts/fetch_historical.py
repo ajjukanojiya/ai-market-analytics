@@ -91,4 +91,4 @@ def fetch_historical_data(days=60):
         db.close()
 
 if __name__ == "__main__":
-    fetch_historical_data(60)
+    fetch_historical_data(5)
