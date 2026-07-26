@@ -99,12 +99,19 @@ class DhanService:
             import threading
             self.ws_thread = threading.Thread(target=self.feed.run_forever, daemon=True)
             self.ws_thread.start()
-            logger.info("Dhan Live MarketFeed WebSocket started.")
+            
+            # Start 5-min database poller thread
+            self._stop_polling = False
+            self.poll_thread = threading.Thread(target=self._poll_5min_data, daemon=True)
+            self.poll_thread.start()
+            
+            logger.info("Dhan Live MarketFeed WebSocket and 5-min DB Poller started.")
         except Exception as e:
             logger.error(f"Error starting Dhan WebSocket: {e}")
 
     def stop_live_feed(self):
-        """Stop the Dhan WebSocket feed."""
+        """Stop the Dhan WebSocket feed and background polling."""
+        self._stop_polling = True
         try:
             if hasattr(self, 'feed') and self.feed:
                 self.feed.close_connection()
@@ -116,6 +123,65 @@ class DhanService:
                 logger.error(f"Error stopping Dhan WebSocket: {e}")
         except Exception as e:
             logger.error(f"Error stopping Dhan WebSocket: {e}")
+            
+    def _poll_5min_data(self):
+        import time
+        from datetime import datetime
+        from app.db.session import SessionLocal
+        from app.models.market_data import MarketData
+        from app.models.asset import Asset
+        
+        # Wait a bit before starting to ensure DB is initialized
+        time.sleep(10)
+        
+        while not getattr(self, '_stop_polling', False):
+            try:
+                now = datetime.now()
+                # Run exactly at every 5th minute boundary + a few seconds delay to ensure data is ready on exchange side
+                if now.minute % 5 == 0 and now.second < 30:
+                    db = SessionLocal()
+                    try:
+                        # Fetch for NIFTY 50
+                        data = self.get_intraday_data(security_id="13", exchange_segment="IDX_I", instrument_type="INDEX", interval=5)
+                        if data and len(data.get('start_Time', [])) > 0:
+                            # Parse last closed candle
+                            ts_str = data['start_Time'][-2] if len(data['start_Time']) > 1 else data['start_Time'][-1]
+                            from datetime import timezone, timedelta
+                            IST = timezone(timedelta(hours=5, minutes=30))
+                            # Dhan format usually: "2024-01-01 09:15:00"
+                            ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=IST)
+                            
+                            idx = -2 if len(data['start_Time']) > 1 else -1
+                            
+                            asset = db.query(Asset).filter(Asset.symbol == "NIFTY 50").first()
+                            if asset:
+                                # Check if already exists
+                                exists = db.query(MarketData).filter(MarketData.asset_id == asset.id, MarketData.timestamp == ts).first()
+                                if not exists:
+                                    candle = MarketData(
+                                        asset_id=asset.id,
+                                        timestamp=ts,
+                                        timeframe="5m",
+                                        open=float(data['open'][idx]),
+                                        high=float(data['high'][idx]),
+                                        low=float(data['low'][idx]),
+                                        close=float(data['close'][idx]),
+                                        volume=int(data['volume'][idx]) if 'volume' in data else 0
+                                    )
+                                    db.add(candle)
+                                    db.commit()
+                                    logger.info(f"Saved real 5-min candle for NIFTY 50 at {ts}")
+                    except Exception as inner_e:
+                        logger.error(f"Error in 5-min polling loop inner: {inner_e}")
+                    finally:
+                        db.close()
+                    # Sleep to prevent multiple hits in the same minute
+                    time.sleep(60)
+                else:
+                    time.sleep(5)
+            except Exception as e:
+                logger.error(f"Error in 5-min polling loop: {e}")
+                time.sleep(30)
             
     def get_intraday_data(self, security_id: str, exchange_segment: str, instrument_type: str, interval: int = 5):
         """
