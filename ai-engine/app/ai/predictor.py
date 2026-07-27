@@ -33,14 +33,18 @@ def generate_live_prediction(symbol="NIFTY 50"):
         latest_window_df = df.tail(60)
         current_close = float(latest_window_df.iloc[-1]['close'])
         
+        if "CRUDE" in symbol:
+            current_close = current_close * 83.5
+            
         if not model.load(prefix=model_prefix):
             logger.warning(f"No AI model for {symbol}. Using Technical Indicator Fallback.")
             # Fallback: Simple SMA Crossover
-            sma10 = latest_window_df.iloc[-1]['SMA_10'] if 'SMA_10' in latest_window_df else current_close
-            sma20 = latest_window_df.iloc[-1]['SMA_20'] if 'SMA_20' in latest_window_df else current_close
+            sma10 = latest_window_df.iloc[-1]['SMA_10'] if 'SMA_10' in latest_window_df else latest_window_df.iloc[-1]['close']
+            sma20 = latest_window_df.iloc[-1]['SMA_20'] if 'SMA_20' in latest_window_df else latest_window_df.iloc[-1]['close']
             direction = "BUY" if sma10 > sma20 else "SELL"
             confidence = 65.0
-            expected_close = current_close + (10 if direction == "BUY" else -10)
+            margin_pts = 10 if "NIFTY" in symbol else 15
+            expected_close = current_close + (margin_pts if direction == "BUY" else -margin_pts)
         else:
             # We need to scale the data using the SAME scaler that was used for training.
             _, _, _, scaler = create_sequences(df, lookback=60)
@@ -63,6 +67,9 @@ def generate_live_prediction(symbol="NIFTY 50"):
             # Original classification confidence
             confidence = dir_prob[0][dir_pred[0]] * 100
             expected_close = float(price_pred[0])
+            
+            if "CRUDE" in symbol:
+                expected_close = expected_close * 83.5
             
             # FIX LOGICAL CONTRADICTIONS:
             # Trust the price model over the trend model.

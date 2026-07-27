@@ -138,8 +138,18 @@ def get_latest_market_data(symbol: str = "NIFTY 50", db: Session = Depends(get_d
         item.pop('_sa_instance_state', None)
         
         # Ensure timezone is IST so frontend displays it correctly
-        if isinstance(item.get('timestamp'), datetime) and item['timestamp'].tzinfo is None:
-            item['timestamp'] = item['timestamp'].replace(tzinfo=IST)
+        if isinstance(item.get('timestamp'), datetime):
+            if item['timestamp'].tzinfo is None:
+                item['timestamp'] = item['timestamp'].replace(tzinfo=IST)
+            else:
+                item['timestamp'] = item['timestamp'].astimezone(IST)
+                
+        # Scale Crude Oil NYMEX prices to MCX INR equivalent (~83.5 exchange rate)
+        if symbol == "CRUDE OIL (MCX)":
+            item['open'] = round(item['open'] * 83.5, 2)
+            item['high'] = round(item['high'] * 83.5, 2)
+            item['low'] = round(item['low'] * 83.5, 2)
+            item['close'] = round(item['close'] * 83.5, 2)
             
         result.append(item)
             
@@ -183,12 +193,14 @@ def get_latest_prediction(symbol: str = "NIFTY 50", db: Session = Depends(get_db
     
     # Ensure timezone is IST so frontend displays it correctly
     if isinstance(pred_dict.get('timestamp'), datetime):
-        # Force the DB time to be interpreted as IST without shifting hours
-        pred_dict['timestamp'] = pred_dict['timestamp'].replace(tzinfo=IST)
+        if pred_dict['timestamp'].tzinfo is None:
+            pred_dict['timestamp'] = pred_dict['timestamp'].replace(tzinfo=IST)
+        else:
+            pred_dict['timestamp'] = pred_dict['timestamp'].astimezone(IST)
         
     # INTRADAY AUTO-CLOSE LOGIC
     now_ist = datetime.now(IST)
-    if symbol == "CRUDEOIL":
+    if "CRUDE" in symbol:
         # MCX is open till 11:30 PM (23:30)
         is_market_closed = now_ist.hour >= 23 and now_ist.minute >= 30
     else:
@@ -289,8 +301,11 @@ def get_prediction_history(symbol: str = "NIFTY 50", db: Session = Depends(get_d
     result = []
     for p in preds:
         ts = p.timestamp
-        # Force the DB time to be interpreted as IST without shifting hours
-        ts = ts.replace(tzinfo=IST)
+        # Convert DB UTC time to IST
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=IST)
+        else:
+            ts = ts.astimezone(IST)
             
         date_str = ts.strftime('%Y-%m-%d')
         time_str = ts.strftime('%H:%M')
