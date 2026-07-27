@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     POSTGRES_PORT: str = "5432"
     POSTGRES_DB: str = "market_data"
     
+    DATABASE_URL: str | None = None
+    
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         import os
         # Render provides DATABASE_URL for Postgres instances
-        db_url = os.environ.get("DATABASE_URL")
+        db_url = self.DATABASE_URL or os.environ.get("DATABASE_URL")
         if db_url:
             # SQLAlchemy 1.4+ and psycopg3 require 'postgresql+psycopg://'
             if db_url.startswith("postgres://"):
