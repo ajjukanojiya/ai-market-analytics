@@ -118,7 +118,7 @@ export default function Dashboard() {
     fetchData();
     const interval = setInterval(fetchData, 30000); // Refresh every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSymbol]); // Added selectedSymbol so it refetches when dropdown changes!
 
   // Fast WebSocket for Live NIFTY LTP Box
   useEffect(() => {
