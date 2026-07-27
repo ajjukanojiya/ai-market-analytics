@@ -26,8 +26,6 @@ def init_db():
             logger.info("Adding NIFTY 50 to the database...")
             nifty = Asset(
                 symbol="NIFTY 50",
-                name="Nifty 50 Index",
-                asset_type="INDEX",
                 exchange="NSE",
                 is_active=True
             )
