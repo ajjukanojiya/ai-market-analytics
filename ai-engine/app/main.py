@@ -12,6 +12,8 @@ import time
 from app.services.dhan_service import dhan_service
 from app.services.ws_manager import manager
 from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
+from scripts.fetch_fast import fetch_fast
 
 class TokenUpdateReq(BaseModel):
     client_id: str
@@ -63,11 +65,25 @@ def startup_event():
         
     # Start Dhan live feed connection in background
     dhan_service.start_live_feed()
+    
+    # Start APScheduler for automatic background data fetching every 5 minutes
+    try:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(fetch_fast, 'interval', minutes=5)
+        scheduler.start()
+        app.state.scheduler = scheduler
+        print("Started APScheduler for automatic background data fetch.")
+    except Exception as e:
+        print(f"Error starting scheduler: {e}")
 
 @app.on_event("shutdown")
 def shutdown_event():
     # Stop Dhan live feed
     dhan_service.stop_live_feed()
+    
+    # Stop Scheduler
+    if hasattr(app.state, 'scheduler'):
+        app.state.scheduler.shutdown()
 
 def get_db():
     db = SessionLocal()
