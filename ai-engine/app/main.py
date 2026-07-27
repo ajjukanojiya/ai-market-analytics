@@ -68,8 +68,10 @@ def startup_event():
     
     # Start APScheduler for automatic background data fetching every 5 minutes
     try:
+        from datetime import datetime
         scheduler = BackgroundScheduler()
-        scheduler.add_job(fetch_fast, 'interval', minutes=5)
+        # Run immediately, then every 5 minutes
+        scheduler.add_job(fetch_fast, 'interval', minutes=5, next_run_time=datetime.now())
         scheduler.start()
         app.state.scheduler = scheduler
         print("Started APScheduler for automatic background data fetch.")

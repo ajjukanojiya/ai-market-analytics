@@ -75,8 +75,10 @@ def fetch_fast():
         
     try:
         # After updating market data, generate the latest AI prediction
-        logger.info("Generating live AI prediction...")
-        generate_live_prediction()
+        logger.info("Generating live AI prediction for NIFTY 50...")
+        generate_live_prediction("NIFTY 50")
+        logger.info("Generating live AI prediction for CRUDE OIL (MCX)...")
+        generate_live_prediction("CRUDE OIL (MCX)")
     except Exception as e:
         logger.error(f"Prediction Error: {e}")
     finally:
