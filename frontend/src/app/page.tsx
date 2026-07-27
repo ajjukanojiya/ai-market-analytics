@@ -211,12 +211,10 @@ export default function Dashboard() {
 
   // Smart Health Indicator Logic
   const timeSinceLastData = (Date.now() - lastDataFetch) / 1000 / 60; // in minutes
-  const currentHour = new Date().getHours();
-  const currentMinute = new Date().getMinutes();
-  const isMarketOpen = selectedSymbol === 'CRUDEOIL'
-    ? (currentHour >= 9 && (currentHour < 23 || (currentHour === 23 && currentMinute <= 30)))
-    : ((currentHour > 9 || (currentHour === 9 && currentMinute >= 15)) && 
-       (currentHour < 15 || (currentHour === 15 && currentMinute < 30)));
+  const now = new Date().getHours() * 60 + new Date().getMinutes();
+  const isMarketOpen = selectedSymbol === 'CRUDE OIL (MCX)'
+    ? (now >= 9 * 60 + 0 && now <= 23 * 60 + 30)
+    : (now >= 9 * 60 + 15 && now <= 15 * 60 + 30);
   const isDataStale = isMarketOpen && timeSinceLastData > 10;
   
   let systemStatusColor = 'bg-green-500';
@@ -270,7 +268,7 @@ export default function Dashboard() {
             className="glass-panel px-3 py-1.5 rounded-lg bg-transparent text-sm text-gray-300 border border-white/10 outline-none focus:border-blue-500/50 cursor-pointer"
           >
             <option value="NIFTY 50" className="bg-[#18181b]">NIFTY 50 (Index)</option>
-            <option value="CRUDEOIL" className="bg-[#18181b]">CRUDE OIL (MCX)</option>
+            <option value="CRUDE OIL (MCX)" className="bg-[#18181b]">CRUDE OIL (MCX)</option>
           </select>
           <button onClick={() => setIsSettingsOpen(true)} className="glass-panel px-3 py-2 rounded-full hover:bg-white/5 transition-colors">
             <Settings size={18} className="text-gray-400" />
