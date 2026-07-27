@@ -34,6 +34,20 @@ def init_db():
             logger.info("NIFTY 50 added.")
         else:
             logger.info("NIFTY 50 already exists in the database.")
+            
+        crude = db.query(Asset).filter(Asset.symbol == "CRUDE OIL (MCX)").first()
+        if not crude:
+            logger.info("Adding CRUDE OIL (MCX) to the database...")
+            crude = Asset(
+                symbol="CRUDE OIL (MCX)",
+                exchange="MCX",
+                is_active=True
+            )
+            db.add(crude)
+            db.commit()
+            logger.info("CRUDE OIL (MCX) added.")
+        else:
+            logger.info("CRUDE OIL (MCX) already exists in the database.")
     except Exception as e:
         logger.error(f"Error initializing DB: {e}")
         db.rollback()
