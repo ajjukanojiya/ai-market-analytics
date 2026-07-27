@@ -144,13 +144,6 @@ def get_latest_market_data(symbol: str = "NIFTY 50", db: Session = Depends(get_d
             else:
                 item['timestamp'] = item['timestamp'].astimezone(IST)
                 
-        # Scale Crude Oil NYMEX prices to MCX INR equivalent (~83.5 exchange rate)
-        if symbol == "CRUDE OIL (MCX)":
-            item['open'] = round(item['open'] * 83.5, 2)
-            item['high'] = round(item['high'] * 83.5, 2)
-            item['low'] = round(item['low'] * 83.5, 2)
-            item['close'] = round(item['close'] * 83.5, 2)
-            
         result.append(item)
             
     return {"data": result}

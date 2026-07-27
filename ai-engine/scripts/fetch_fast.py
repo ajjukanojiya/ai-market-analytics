@@ -91,14 +91,26 @@ def fetch_asset(db, symbol_db, symbol_yf, dhan_args=None):
             ).first()
             
             if not exists:
+                open_p = float(row['Open'].iloc[0] if isinstance(row['Open'], pd.Series) else row['Open'])
+                high_p = float(row['High'].iloc[0] if isinstance(row['High'], pd.Series) else row['High'])
+                low_p = float(row['Low'].iloc[0] if isinstance(row['Low'], pd.Series) else row['Low'])
+                close_p = float(row['Close'].iloc[0] if isinstance(row['Close'], pd.Series) else row['Close'])
+                
+                # Scale NYMEX Crude Oil USD data to INR MCX format (approximate)
+                if "CRUDE" in symbol_db:
+                    open_p = round(open_p * 83.5, 2)
+                    high_p = round(high_p * 83.5, 2)
+                    low_p = round(low_p * 83.5, 2)
+                    close_p = round(close_p * 83.5, 2)
+                    
                 candle = MarketData(
                     asset_id=asset.id,
                     timeframe="5m",
                     timestamp=timestamp,
-                    open=float(row['Open'].iloc[0] if isinstance(row['Open'], pd.Series) else row['Open']),
-                    high=float(row['High'].iloc[0] if isinstance(row['High'], pd.Series) else row['High']),
-                    low=float(row['Low'].iloc[0] if isinstance(row['Low'], pd.Series) else row['Low']),
-                    close=float(row['Close'].iloc[0] if isinstance(row['Close'], pd.Series) else row['Close']),
+                    open=open_p,
+                    high=high_p,
+                    low=low_p,
+                    close=close_p,
                     volume=int(row['Volume'].iloc[0] if isinstance(row['Volume'], pd.Series) else row['Volume'])
                 )
                 db.add(candle)
